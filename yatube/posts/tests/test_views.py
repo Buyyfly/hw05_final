@@ -8,7 +8,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django import forms
 
-from ..models import Group, Post, Follow
+from ..models import Group, Post
 
 User = get_user_model()
 
@@ -167,8 +167,9 @@ class TaskURLTests(TestCase):
                                 group=first_object.group,
                                 image='posts/small.gif')
 
-        response = self.authorized_client.get(
-            reverse('posts:post_detail', kwargs={'post_id': f'{post_image.id}'})
+        response = self.authorized_client.get(reverse(
+            'posts:post_detail',
+            kwargs={'post_id': f'{post_image.id}'})
         )
         self.assertIn('post', response.context)
         first_object = response.context['post']
@@ -197,7 +198,9 @@ class TestSubs(TestCase):
         super().setUpClass()
         cls.user_author = User.objects.create_user(username='Author')
         cls.user = User.objects.create_user(username='TestUser_sub')
-        cls.user_not_sub = User.objects.create_user(username='TestUser_not_sub')
+        cls.user_not_sub = User.objects.create_user(
+            username='TestUser_not_sub'
+        )
         cls.authorized_client = Client()
         cls.authorized_client.force_login(cls.user)
         cls.follow_count = Post.objects.count()
@@ -215,7 +218,10 @@ class TestSubs(TestCase):
             kwargs={'username': self.user_author.username})
         )
         response = self.authorized_client.get(reverse('posts:follow_index'))
-        self.assertEqual(self.follow_count + 1, len(response.context['page_obj']))
+        self.assertEqual(
+            self.follow_count + 1,
+            len(response.context['page_obj'])
+        )
 
     def test_unfollow_aunt_user(self):
         self.authorized_client.get(reverse(

@@ -102,7 +102,9 @@ class TaskURLTests(TestCase):
         """Страница по адресу /posts/111/comment/ перенаправит анонимного
         пользователя на страницу логина.
         """
-        response = self.client.get(f'/posts/{self.post.id}/comment/', follow=True)
+        response = self.client.get(
+            f'/posts/{self.post.id}/comment/', follow=True
+        )
         self.assertRedirects(
             response, ('/auth/login/?next=/posts/111/comment/'))
 
