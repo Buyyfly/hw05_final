@@ -228,7 +228,6 @@ class PostViewsTests(TestCase):
 
     def test_cache(self):
         """Тестирование работы cache"""
-        post_count = Post.objects.count()
         post = Post.objects.create(
             author=self.user,
             text='Тестовый пост',
