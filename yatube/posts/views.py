@@ -2,8 +2,8 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .forms import PostForm, CommentForm
-from .models import Group, Post, User, Comment, Follow
+from .forms import CommentForm, PostForm
+from .models import Comment, Follow, Group, Post, User
 from .utils import paginator_func
 
 
@@ -120,10 +120,8 @@ def follow_index(request):
 @login_required
 def profile_follow(request, username):
     author = get_object_or_404(User, username=username)
-    if request.user != author and not Follow.objects.filter(
-            user=request.user, author=author
-    ).exists():
-        Follow.objects.create(
+    if request.user != author:
+        Follow.objects.get_or_create(
             user=request.user,
             author=author
         )
@@ -133,5 +131,7 @@ def profile_follow(request, username):
 @login_required
 def profile_unfollow(request, username):
     author = get_object_or_404(User, username=username)
-    Follow.objects.filter(user=request.user, author=author).delete()
+    follow = Follow.objects.filter(user=request.user, author=author)
+    if follow is not None:
+        follow.delete()
     return redirect('posts:profile', username)

@@ -2,11 +2,13 @@ import shutil
 import tempfile
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django import forms
+
 
 from ..models import Group, Post
 
@@ -16,7 +18,7 @@ TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
-class TaskURLTests(TestCase):
+class PostViewsTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -29,13 +31,16 @@ class TaskURLTests(TestCase):
             slug='test-slug',
             description='Описание',
         )
+        cls.post_List = []
         for i in range(settings.POSTS_PAGE + 1):
-            cls.post = Post.objects.create(
-                author=cls.user,
-                text='Тестовый пост',
-                group=cls.group
+            cls.post_List.append(
+                Post(
+                    author=cls.user,
+                    text='Тестовый пост',
+                    group=cls.group
+                )
             )
-
+        Post.objects.bulk_create(cls.post_List)
         cls.templates_paginator_test = {
             'posts/index.html': reverse('posts:post_list'),
             'posts/group_list.html': reverse(
@@ -55,6 +60,11 @@ class TaskURLTests(TestCase):
 
     def test_pages_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
+        post = Post.objects.create(
+            author=self.user,
+            text='Тест страцниц',
+            group=self.group,
+        )
         templates_pages_names = {
             'posts/index.html': reverse('posts:post_list'),
             'posts/group_list.html': reverse(
@@ -67,7 +77,7 @@ class TaskURLTests(TestCase):
             ),
             'posts/post_detail.html': reverse(
                 'posts:post_detail',
-                kwargs={'post_id': f'{self.post.id}'}
+                kwargs={'post_id': post.id}
             ),
             'posts/create_post.html': reverse('posts:post_create'),
         }
@@ -78,11 +88,14 @@ class TaskURLTests(TestCase):
 
         response = self.authorized_client.get(
             reverse('posts:post_edit',
-                    kwargs={'post_id': f'{self.post.id}'})
+                    kwargs={'post_id': post.id})
         )
         self.assertTemplateUsed(response, 'posts/create_post.html')
 
     def test_paginator(self):
+        """Проверка пагинатора.
+        Кол-во постов на первой странице соответсвует ожидаемому.
+        """
         for template, reverse_name in self.templates_paginator_test.items():
             with self.subTest(reverse_name=reverse_name):
                 response = self.authorized_client.get(reverse_name)
@@ -92,33 +105,52 @@ class TaskURLTests(TestCase):
                 self.assertEqual(len(response.context['page_obj']), 1)
 
     def test_templates_pages_names_paginator_context(self):
+        """Прерка контекста страниц (с пагинацией)"""
         for template, reverse_name in self.templates_paginator_test.items():
             with self.subTest(reverse_name=reverse_name):
                 response = self.authorized_client.get(reverse_name)
                 self.assertIn('page_obj', response.context)
                 first_object = response.context['page_obj'][0]
-                TaskURLTests.cs(self,
-                                text=first_object.text,
-                                author=first_object.author,
-                                group=first_object.group)
+                PostViewsTests.funk_assert_equal_test(
+                    self,
+                    text=first_object.text,
+                    author=first_object.author,
+                    group=first_object.group
+                )
 
     def test_post_detail_context(self):
+        """Проверка контекста post_detail"""
+        post = Post.objects.create(
+            author=self.user,
+            text='Тестовый пост',
+            group=self.group,
+        )
         response = self.authorized_client.get(
-            reverse('posts:post_detail', kwargs={'post_id': f'{self.post.id}'})
+            reverse('posts:post_detail', kwargs={'post_id': post.id})
         )
         self.assertIn('post', response.context)
         first_object = response.context['post']
         self.assertNotEqual(first_object.group, 'NoGroup')
-        TaskURLTests.cs(self,
-                        text=first_object.text,
-                        author=first_object.author,
-                        group=first_object.group)
+        PostViewsTests.funk_assert_equal_test(
+            self,
+            text=first_object.text,
+            author=first_object.author,
+            group=first_object.group
+        )
 
     def test_create_edit_post_context(self):
+        """Проверка контекста при создании и
+        редактировании поста.
+        """
+        post = Post.objects.create(
+            author=self.user,
+            text='Тестовый пост',
+            group=self.group,
+        )
         templates_create_edit = {
             1: reverse('posts:post_create'),
             2: reverse('posts:post_edit',
-                       kwargs={'post_id': f'{self.post.id}'})
+                       kwargs={'post_id': post.id})
         }
         for template, reverse_name in templates_create_edit.items():
             with self.subTest(reverse_name=reverse_name):
@@ -136,6 +168,7 @@ class TaskURLTests(TestCase):
                         self.assertIsInstance(form_field, expected)
 
     def test_post_image_context(self):
+        """Проверка контекста поста с картинкой"""
         small_gif = (
             b'\x47\x49\x46\x38\x39\x61\x01\x00'
             b'\x01\x00\x00\x00\x00\x21\xf9\x04'
@@ -161,11 +194,13 @@ class TaskURLTests(TestCase):
                 response = self.authorized_client.get(reverse_name)
                 self.assertIn('page_obj', response.context)
                 first_object = response.context['page_obj'][0]
-                TaskURLTests.cs(self,
-                                text=first_object.text,
-                                author=first_object.author,
-                                group=first_object.group,
-                                image='posts/small.gif')
+                PostViewsTests.funk_assert_equal_test(
+                    self,
+                    text=first_object.text,
+                    author=first_object.author,
+                    group=first_object.group,
+                    image='posts/small.gif'
+                )
 
         response = self.authorized_client.get(reverse(
             'posts:post_detail',
@@ -174,15 +209,15 @@ class TaskURLTests(TestCase):
         self.assertIn('post', response.context)
         first_object = response.context['post']
         self.assertNotEqual(first_object.group, 'NoGroup')
-        TaskURLTests.cs(self,
-                        text=first_object.text,
-                        author=first_object.author,
-                        group=first_object.group,
-                        image='posts/small.gif')
-    # Не могу найти инф., когда переименовываю, функцию не может найти
-    # точнее когда у нее имя больше 3х символов. Прошу подсказать
+        PostViewsTests.funk_assert_equal_test(
+            self,
+            text=first_object.text,
+            author=first_object.author,
+            group=first_object.group,
+            image='posts/small.gif'
+        )
 
-    def cs(self, text, author, group, image=None):
+    def funk_assert_equal_test(self, text, author, group, image=None):
         self.assertEqual(group, self.group)
         self.assertEqual(author, self.user)
         if image is not None:
@@ -224,6 +259,7 @@ class TestSubs(TestCase):
         )
 
     def test_unfollow_aunt_user(self):
+        """Тестирование отписки от автора"""
         self.authorized_client.get(reverse(
             'posts:profile_unfollow',
             kwargs={'username': self.user_author.username})
@@ -239,3 +275,12 @@ class TestSubs(TestCase):
         authorized_client.force_login(self.user_not_sub)
         response = authorized_client.get(reverse('posts:follow_index'))
         self.assertEqual(self.follow_count, len(response.context['page_obj']))
+
+    def test_cache(self):
+        """Тестирование работы cache"""
+        response = self.authorized_client.get(reverse('posts:post_list'))
+        Post.objects.filter(pk=self.post.pk).delete()
+        response_del = self.authorized_client.get(reverse('posts:post_list'))
+        self.assertEqual(response.content, response_del.content)
+        cache.clear()
+        self.assertEqual(response.content, response_del.content)

@@ -2,14 +2,13 @@ from http import HTTPStatus
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
-from django.urls import reverse
 
 from ..models import Group, Post
 
 User = get_user_model()
 
 
-class TaskURLTests(TestCase):
+class PostURLTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -107,9 +106,3 @@ class TaskURLTests(TestCase):
         )
         self.assertRedirects(
             response, ('/auth/login/?next=/posts/111/comment/'))
-
-    def test_cache(self):
-        response = self.authorized_client.get(reverse('posts:post_list'))
-        Post.objects.filter(pk=self.post.pk).delete()
-        response_del = self.authorized_client.get(reverse('posts:post_list'))
-        self.assertEqual(response.content, response_del.content)
