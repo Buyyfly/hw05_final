@@ -1,14 +1,13 @@
 import shutil
 import tempfile
 
+from django import forms
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
-from django import forms
-
 
 from ..models import Group, Post
 
@@ -52,6 +51,7 @@ class PostViewsTests(TestCase):
                 kwargs={'username': f'{cls.user.username}'}
             ),
         }
+        cache.clear()
 
     @classmethod
     def tearDownClass(cls):
@@ -111,7 +111,7 @@ class PostViewsTests(TestCase):
                 response = self.authorized_client.get(reverse_name)
                 self.assertIn('page_obj', response.context)
                 first_object = response.context['page_obj'][0]
-                PostViewsTests.funk_assert_equal_test(
+                PostViewsTests.check_context(
                     self,
                     text=first_object.text,
                     author=first_object.author,
@@ -131,7 +131,7 @@ class PostViewsTests(TestCase):
         self.assertIn('post', response.context)
         first_object = response.context['post']
         self.assertNotEqual(first_object.group, 'NoGroup')
-        PostViewsTests.funk_assert_equal_test(
+        PostViewsTests.check_context(
             self,
             text=first_object.text,
             author=first_object.author,
@@ -194,7 +194,7 @@ class PostViewsTests(TestCase):
                 response = self.authorized_client.get(reverse_name)
                 self.assertIn('page_obj', response.context)
                 first_object = response.context['page_obj'][0]
-                PostViewsTests.funk_assert_equal_test(
+                PostViewsTests.check_context(
                     self,
                     text=first_object.text,
                     author=first_object.author,
@@ -209,7 +209,7 @@ class PostViewsTests(TestCase):
         self.assertIn('post', response.context)
         first_object = response.context['post']
         self.assertNotEqual(first_object.group, 'NoGroup')
-        PostViewsTests.funk_assert_equal_test(
+        PostViewsTests.check_context(
             self,
             text=first_object.text,
             author=first_object.author,
@@ -217,7 +217,7 @@ class PostViewsTests(TestCase):
             image='posts/small.gif'
         )
 
-    def funk_assert_equal_test(self, text, author, group, image=None):
+    def check_context(self, text, author, group, image=None):
         self.assertEqual(group, self.group)
         self.assertEqual(author, self.user)
         if image is not None:
@@ -225,6 +225,27 @@ class PostViewsTests(TestCase):
             self.assertEqual(image, 'posts/small.gif')
         else:
             self.assertEqual(text, 'Тестовый пост')
+
+    def test_cache(self):
+        """Тестирование работы cache"""
+        post_count = Post.objects.count()
+        post = Post.objects.create(
+            author=self.user,
+            text='Тестовый пост',
+            group=self.group,
+        )
+        response = self.authorized_client.get(reverse('posts:post_list'))
+        Post.objects.filter(pk=post.pk).delete()
+        response_del = self.authorized_client.get(reverse('posts:post_list'))
+        self.assertEqual(response.content, response_del.content)
+        cache.clear()
+        response_clear_cache = self.authorized_client.get(
+            reverse('posts:post_list')
+        )
+        self.assertNotEqual(
+            response_del.content,
+            response_clear_cache.content
+        )
 
 
 class TestSubs(TestCase):
@@ -275,12 +296,3 @@ class TestSubs(TestCase):
         authorized_client.force_login(self.user_not_sub)
         response = authorized_client.get(reverse('posts:follow_index'))
         self.assertEqual(self.follow_count, len(response.context['page_obj']))
-
-    def test_cache(self):
-        """Тестирование работы cache"""
-        response = self.authorized_client.get(reverse('posts:post_list'))
-        Post.objects.filter(pk=self.post.pk).delete()
-        response_del = self.authorized_client.get(reverse('posts:post_list'))
-        self.assertEqual(response.content, response_del.content)
-        cache.clear()
-        self.assertEqual(response.content, response_del.content)

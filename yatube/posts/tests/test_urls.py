@@ -97,7 +97,7 @@ class PostURLTests(TestCase):
         self.assertRedirects(
             response, ('/auth/login/?next=/posts/111/edit/'))
 
-    def test_comment_auth_user(self):
+    def test_comment_unauth_redirect_to_login_page(self):
         """Страница по адресу /posts/111/comment/ перенаправит анонимного
         пользователя на страницу логина.
         """
