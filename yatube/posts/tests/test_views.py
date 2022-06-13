@@ -51,6 +51,8 @@ class PostViewsTests(TestCase):
                 kwargs={'username': f'{cls.user.username}'}
             ),
         }
+
+    def setUp(self):
         cache.clear()
 
     @classmethod
